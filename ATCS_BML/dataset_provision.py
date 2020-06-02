@@ -57,6 +57,8 @@ def download_dataset(dataset_filename):
 def extract_dataset(dataset_filename):
     decompressed_dataset_filename = dataset_filename[:len(dataset_filename) - 3]  # remove .gz
 
+    print("Extracting data...")
+
     os.chdir(DATA_DIR)
     os.system('gzip -d ' + dataset_filename)
     os.chdir("..")
