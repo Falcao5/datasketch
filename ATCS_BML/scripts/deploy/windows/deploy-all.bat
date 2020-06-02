@@ -5,5 +5,4 @@ set DEPLOY_DESTINATION="/home/datasketch/"
 set USER="datasketch"
 
 scp -P %PORT% %ATCS_BML_DIR%dataset_provision.py %USER%@%HOSTNAME%:%DEPLOY_DESTINATION%
-scp -P %PORT% %ATCS_BML_DIR%hyperloglog_execution.py %USER%@%HOSTNAME%:%DEPLOY_DESTINATION%
-scp -P %PORT% %ATCS_BML_DIR%minhash_execution.py %USER%@%HOSTNAME%:%DEPLOY_DESTINATION%
+scp -P %PORT% %ATCS_BML_DIR%datasketch_executor.py %USER%@%HOSTNAME%:%DEPLOY_DESTINATION%
