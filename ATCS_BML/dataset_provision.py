@@ -1,6 +1,5 @@
 import os.path
 import platform
-import gzip
 
 DATA_DIR = "data/"
 
