@@ -67,13 +67,17 @@ def extract_dataset(dataset_filename):
 
 def download_dataset_if_needed(dataset_filename):
     decompressed_dataset_filename = dataset_filename[:len(dataset_filename) - 3]
+
+    if check_if_dataset_exists(decompressed_dataset_filename):
+        return decompressed_dataset_filename
+
     if not check_if_dataset_exists(decompressed_dataset_filename) and check_if_dataset_filename_is_valid(dataset_filename):
         print("Dataset " + dataset_filename + " wasn't downloaded, i'll try to download it right now...")
 
         if download_dataset(dataset_filename) == dataset_filename:
             return extract_dataset(dataset_filename)
 
-    if check_if_dataset_exists(decompressed_dataset_filename):
-        return decompressed_dataset_filename
+    if check_if_dataset_exists(dataset_filename):
+        return dataset_filename
 
     return None
