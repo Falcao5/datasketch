@@ -29,3 +29,8 @@ The _datasets_ required in the third point, must be values of a vector (maybe th
 
 There is a list of datasets that our teacher told us to use, this list is reachable at [this repo](https://github.com/ekzhu/set-similarity-search-benchmarks)
 Instead of manually downloading these datasets, you can easily write the name of the dataset you wish to use (including .gz), and the script will automatically download it.
+
+## Algorithm parameters tuning
+
+The only parameter on which you can do tuning, is the tolerance, or error (see the [paper](https://dl.acm.org/doi/10.14778/3231751.3231759) for more details).
+You can tune it by editing the script binomial_mean_lookup.py in the top of the file.
