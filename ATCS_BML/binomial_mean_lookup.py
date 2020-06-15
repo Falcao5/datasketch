@@ -6,7 +6,7 @@ from datasketch import HyperLogLog
 from dataset_provision import download_dataset_if_needed
 from dataset_provision import DATA_DIR
 
-TOLERANCE = 10 ** -2
+TOLERANCE = 10 ** -4
 
 
 def print_lookup_internal_state(P, min, max, nx, ny, k, prob, nt, phi, nxx, nyy):
@@ -67,8 +67,22 @@ def equation_8(k, nx, ny, nt):
     return result
 
 
+# tought that maybe varying the error based on the probability value could help
+# when probability is high we set a very low error tolerance, and when it's low we set a more relaxed error tolerance
+def get_params(probability):
+    if probability >= 0.6:
+        error_tolerance = 0.0000001
+    elif probability >= 0.5:
+        error_tolerance = 0.001
+    else:
+        error_tolerance = 0.35
+
+    return error_tolerance
+
+
 # this function represents an implementation of algorithm 2 described in the paper.
-def lookup(P, min, max, nx, ny, k):
+def lookup(P, min, max, nx, ny, k, count):
+    count += 1
     # n-tau
     nt = (min + max) / 2
     # inclusion coefficient estimated
@@ -98,19 +112,31 @@ def lookup(P, min, max, nx, ny, k):
         print("Case 3 - Equation 8")
         prob = equation_8(k, nxx, nyy, nt)
 
+    # dynamic error tolerance to use instead of a fixed one
+    # TOLERANCE = get_params(P)
     prob = abs(prob)
+
     print_lookup_internal_state(P, min, max, nx, ny, k, prob, nt, phi, nxx, nyy)
     print("==============================")
+
+    # this what we call 'na mandragata to avoid recursion error
+    if round(phi, 5) == 0.00000 or count > 900:
+        return phi
+
+    if prob <= 0.5:
+        return 0.0
 
     # convergence criteria
     if abs(prob - P) <= TOLERANCE:
         return phi
     # recursion 1
-    if prob < P:                                    # inverted
-        return lookup(P, nt, max, nx, ny, k)
+    # this is the opposite of what's reported on the paper (prob > P)
+    if prob < P:
+        return lookup(P, nt, max, nx, ny, k, count)
     # recursion 2
-    if prob > P:                                    # inverted
-        return lookup(P, min, nt, nx, ny, k)
+    # this is the opposite of what's reported on the paper (prob < P)
+    if prob > P:
+        return lookup(P, min, nt, nx, ny, k, count)
 
 
 def estimate_distinct_values_for_column(c):
@@ -165,8 +191,31 @@ def calculate_actual_inclusion_coefficient(column_1, column_2):
     return actual_inclusion_coefficient
 
 
+# seems that accuracy of lookup depends on this adjustment it is just sperimental and not reported in the paper
+# but it seems to correct a lot of lookup errors. it seems to have a sort of meaning cause it makes possible to
+# give less importance to P based on the size diffrence and size ratio of the sets
+# values used in this function were not given but were observed by running a lot of sperimentations
+def adjust_prob(prob, nx, ny):
+    adjusted_probability = prob
+    # considering the size diffrence between the compared columns
+    size_difference = nx - ny
+    # if size of column_y is greater that column_x
+    if size_difference >= 0.0:
+        if prob < 0.5:
+            adjusted_probability = 0.0
+    else:
+        if nx / ny < 0.7:
+            if prob < 0.85:
+                adjusted_probability = 0.0
+        else:
+            if prob < 0.65:
+                adjusted_probability = 0.0
+    return adjusted_probability
+
+
 # this function represents an implementation of the algorithm 1 described in the paper
 def binomial_mean_lookup(column_1, column_2):
+    estimated_values = ()
     # calculate actual inclusion coefficient for evaluation purposes
     actual_inclusion_coefficient = calculate_actual_inclusion_coefficient(column_1, column_2)
 
@@ -192,7 +241,7 @@ def binomial_mean_lookup(column_1, column_2):
         # if the value in the i-bucket of the x sketch, is greater then the i-bucket value in the y sketch
         if s_x[i] <= s_y[i]:
             # increase counter
-            z = z+1
+            z = z + 1
 
     # ration of number of buckets coming from X sketch with a value not greater then the Y sketch one.
     P = z / buckets_number
@@ -201,12 +250,16 @@ def binomial_mean_lookup(column_1, column_2):
     n_x = estimate_distinct_values_for_column(column_1)
     n_y = estimate_distinct_values_for_column(column_2)
 
-    # now execute the lookup phase of the algorithm
-    result = lookup(P, 0, min(n_x, n_y), n_x, n_y, k)
+    # adjusted probability to use in lookup instead of P
+    # probability = adjust_prob(P, n_x, n_y)
 
-    #if round(result, 1) == round(actual_inclusion_coefficient, 1):
+    # now execute the lookup phase of the algorithm
+    result = lookup(P, 0, min(n_x, n_y), n_x, n_y, k, 0)
+
+    if round(result, 1) == round(actual_inclusion_coefficient, 1):
+        estimated_values = result, actual_inclusion_coefficient
     print(round(result, 1), round(actual_inclusion_coefficient, 1))
-    return result
+    return result, estimated_values
 
 
 def parse_line(line):
@@ -238,7 +291,19 @@ def parse_dataset(dataset_1, dataset_2):
     return dataset_1_list, dataset_2_list
 
 
+def evaluate_results(predictions_list, lenght):
+    count = 0
+    for elem in predictions_list:
+        if len(elem) > 0:
+            count += 1
+
+    precision = count / lenght
+
+    print('BML Precision: ', precision)
+
+
 def compute_cartesian_product(dataset_1, dataset_2):
+    predictions_list = []
     dataset_x_list, dataset_y_list = parse_dataset(dataset_1, dataset_2)
 
     for couple in itertools.product(dataset_x_list, dataset_y_list):
@@ -248,9 +313,13 @@ def compute_cartesian_product(dataset_1, dataset_2):
         column_y = couple[1][1]
 
         # compute the inclusion coefficent between these columns
-        # print("I'll try to solve this in ", sys.getrecursionlimit(), " recursive iterations.")
-        inclusion_coefficent = binomial_mean_lookup(column_x, column_y)
+        print("I'll try to solve this in ", sys.getrecursionlimit(), " recursive iterations.")
+        inclusion_coefficent, predictions = binomial_mean_lookup(column_x, column_y)
+        predictions_list.append(predictions)
         print("Inclusion coefficent between column", key1, " and column ", key2, " is: ", inclusion_coefficent)
+
+    lenght = len(list(itertools.product(dataset_x_list, dataset_y_list)))
+    evaluate_results(predictions_list, lenght)
 
 
 def main(argv):
