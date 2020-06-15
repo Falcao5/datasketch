@@ -43,26 +43,26 @@ def support_function_3(n, k):
 # this is the implementation of the equation 6 described in the paper
 def equation_6(k, nx, ny):
     result = 0
-    for i in range(0, k):
-        result += support_function_1(nx, k) * support_function_3(ny, k)
+    for i in range(1, k + 1):
+        result += support_function_1(nx, i) * support_function_3(ny, i)
     return result
 
 
 # this is the implementation of the equation 7 described in the paper
 def equation_7(k, nx, nt):
     result = 0
-    for i in range(0, k):
-        result += support_function_1(nx, k) * support_function_3(nt, k)
+    for i in range(1, k + 1):
+        result += support_function_1(nx, i) * support_function_3(nt, i)
     return result
 
 
 # this is the implementation of the equation 8 described in the paper
 def equation_8(k, nx, ny, nt):
     result = 0
-    for i in range(0, k):
-        result += (support_function_1(nx, k) * support_function_2(nt, k) * support_function_3(ny, k)) + \
-                  (support_function_1(nx, k) * support_function_3(nt, k) * support_function_2(ny, k)) + \
-                  (support_function_1(nx, k) * support_function_3(nt, k) * support_function_3(ny, k))
+    for i in range(1, k + 1):
+        result += (support_function_1(nx, i) * support_function_2(nt, i) * support_function_3(ny, i)) + \
+                  (support_function_1(nx, i) * support_function_3(nt, i) * support_function_2(ny, i)) + \
+                  (support_function_1(nx, i) * support_function_3(nt, i) * support_function_3(ny, i))
 
     return result
 
@@ -98,6 +98,7 @@ def lookup(P, min, max, nx, ny, k):
         print("Case 3 - Equation 8")
         prob = equation_8(k, nxx, nyy, nt)
 
+    prob = abs(prob)
     print_lookup_internal_state(P, min, max, nx, ny, k, prob, nt, phi, nxx, nyy)
     print("==============================")
 
@@ -105,10 +106,10 @@ def lookup(P, min, max, nx, ny, k):
     if abs(prob - P) <= TOLERANCE:
         return phi
     # recursion 1
-    if prob > P:
+    if prob < P:                                    # inverted
         return lookup(P, nt, max, nx, ny, k)
     # recursion 2
-    if prob < P:
+    if prob > P:                                    # inverted
         return lookup(P, min, nt, nx, ny, k)
 
 
@@ -187,14 +188,14 @@ def binomial_mean_lookup(column_1, column_2):
     # this is a counter used to count how many X buckets values (the l-m portion of the string) are not greater than Y
     z = 0
 
-    for i in range(1, buckets_number):
+    for i in range(0, buckets_number):
         # if the value in the i-bucket of the x sketch, is greater then the i-bucket value in the y sketch
         if s_x[i] <= s_y[i]:
             # increase counter
             z = z+1
 
     # ration of number of buckets coming from X sketch with a value not greater then the Y sketch one.
-    P = z/pow(2, buckets_number)
+    P = z / buckets_number
 
     # This count has been done in a function above. Optimizing this, may increase performance on big datasets
     n_x = estimate_distinct_values_for_column(column_1)
@@ -217,24 +218,39 @@ def parse_line(line):
     return key, column
 
 
-def compute_cartesian_product(column_x_name, column_y_name):
+def parse_dataset(dataset_1, dataset_2):
+    dataset_1_list = []
+    dataset_2_list = []
     # open a stream with the first dataset of the pair
-    with open(DATA_DIR + column_x_name) as column_x:
-        # open a stream with the second dataset of the pair
-        with open(DATA_DIR + column_y_name) as column_y:
+    with open(DATA_DIR + dataset_1) as column_x:
+        for line in column_x:
+            # save into this variable all the values for this column
+            key1, column_1 = parse_line(line)
+            dataset_1_list.append((key1, column_1))
 
-            for line in column_x:
-                key1, column_1 = parse_line(line)
-                # save into this variable all the values for this column
+    # open a stream with the second dataset of the pair
+    with open(DATA_DIR + dataset_2) as column_y:
+        for line1 in column_y:
+            # save into this variable all the values for this column
+            key2, column_2 = parse_line(line1)
+            dataset_2_list.append((key2, column_2))
 
-                for line1 in column_y:
-                    # save into this variable all the values for this column
-                    key2, column_2 = parse_line(line1)
+    return dataset_1_list, dataset_2_list
 
-                    # compute the inclusion coefficent between these columns
-                    print("I'll try to solve this in ", sys.getrecursionlimit(), " recursive iterations.")
-                    inclusion_coefficent = binomial_mean_lookup(column_1, column_2)
-                    print("Inclusion coefficent between column", key1, " and column ", key2, " is: ", inclusion_coefficent)
+
+def compute_cartesian_product(dataset_1, dataset_2):
+    dataset_x_list, dataset_y_list = parse_dataset(dataset_1, dataset_2)
+
+    for couple in itertools.product(dataset_x_list, dataset_y_list):
+        key1 = couple[0][0]
+        key2 = couple[1][0]
+        column_x = couple[0][1]
+        column_y = couple[1][1]
+
+        # compute the inclusion coefficent between these columns
+        # print("I'll try to solve this in ", sys.getrecursionlimit(), " recursive iterations.")
+        inclusion_coefficent = binomial_mean_lookup(column_x, column_y)
+        print("Inclusion coefficent between column", key1, " and column ", key2, " is: ", inclusion_coefficent)
 
 
 def main(argv):
@@ -246,10 +262,10 @@ def main(argv):
 
     # for each pair of dataset names
     for pair in itertools.combinations(argv[1:], 2):
-        column_x_name = download_dataset_if_needed(pair[0])
-        column_y_name = download_dataset_if_needed(pair[1])
+        dataset_x = download_dataset_if_needed(pair[0])
+        dataset_y = download_dataset_if_needed(pair[1])
 
-        compute_cartesian_product(column_x_name, column_y_name)
+        compute_cartesian_product(dataset_x, dataset_y)
 
 
 if __name__ == "__main__":
