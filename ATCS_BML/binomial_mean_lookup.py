@@ -6,7 +6,7 @@ from datasketch import HyperLogLog
 from dataset_provision import download_dataset_if_needed
 from dataset_provision import DATA_DIR
 
-TOLERANCE = 10 ** -4
+TOLERANCE = 10 ** -2
 
 
 def print_lookup_internal_state(P, min, max, nx, ny, k, prob, nt, phi, nxx, nyy):
@@ -151,12 +151,24 @@ def calculate_m(column_1, column_2):
 
     # calculate m as follow
     m = round(math.log(max(n_1, n_2) / 2))
+    m = 4 if m < 4 else m
 
     return m
 
 
+def calculate_actual_inclusion_coefficient(column_1, column_2):
+    set_column1 = set(column_1)
+    set_column2 = set(column_2)
+    actual_inclusion_coefficient = len(set_column1.intersection(set_column2)) / len(set_column1)
+
+    return actual_inclusion_coefficient
+
+
 # this function represents an implementation of the algorithm 1 described in the paper
 def binomial_mean_lookup(column_1, column_2):
+    # calculate actual inclusion coefficient for evaluation purposes
+    actual_inclusion_coefficient = calculate_actual_inclusion_coefficient(column_1, column_2)
+
     # calculate the number of bits required to bucketize the values
     m = calculate_m(column_1, column_2)
 
@@ -190,7 +202,39 @@ def binomial_mean_lookup(column_1, column_2):
 
     # now execute the lookup phase of the algorithm
     result = lookup(P, 0, min(n_x, n_y), n_x, n_y, k)
+
+    #if round(result, 1) == round(actual_inclusion_coefficient, 1):
+    print(round(result, 1), round(actual_inclusion_coefficient, 1))
     return result
+
+
+def parse_line(line):
+    key, col = line.split('\t')
+    column = col.split(',')
+    # remove \n from last element of column
+    column[-1] = column[-1][:-1]
+
+    return key, column
+
+
+def compute_cartesian_product(column_x_name, column_y_name):
+    # open a stream with the first dataset of the pair
+    with open(DATA_DIR + column_x_name) as column_x:
+        # open a stream with the second dataset of the pair
+        with open(DATA_DIR + column_y_name) as column_y:
+
+            for line in column_x:
+                key1, column_1 = parse_line(line)
+                # save into this variable all the values for this column
+
+                for line1 in column_y:
+                    # save into this variable all the values for this column
+                    key2, column_2 = parse_line(line1)
+
+                    # compute the inclusion coefficent between these columns
+                    print("I'll try to solve this in ", sys.getrecursionlimit(), " recursive iterations.")
+                    inclusion_coefficent = binomial_mean_lookup(column_1, column_2)
+                    print("Inclusion coefficent between column", key1, " and column ", key2, " is: ", inclusion_coefficent)
 
 
 def main(argv):
@@ -205,21 +249,7 @@ def main(argv):
         column_x_name = download_dataset_if_needed(pair[0])
         column_y_name = download_dataset_if_needed(pair[1])
 
-        # open a stream with the first dataset of the pair
-        with open(DATA_DIR + column_x_name) as column_x:
-            # open a stream with the second dataset of the pair
-            with open(DATA_DIR + column_y_name) as column_y:
-
-                # save into this variable all the values for this column
-                column_1 = column_x.readlines()
-                # save into this variable all the values for this column
-                column_2 = column_y.readlines()
-
-                # compute the inclusion coefficent between these columns
-                print("I'll try to solve this in ", sys.getrecursionlimit(), " recursive iterations.")
-
-                inclusion_coefficent = binomial_mean_lookup(column_1, column_2)
-                print("Inclusion coefficent between ", column_x_name, " and ", column_y_name, " is: ", inclusion_coefficent)
+        compute_cartesian_product(column_x_name, column_y_name)
 
 
 if __name__ == "__main__":
